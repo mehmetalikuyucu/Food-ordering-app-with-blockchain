@@ -1,198 +1,271 @@
-/**
- *Submitted for verification at Etherscan.io on 2022-06-30
-*/
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.9;
 
-//SPDX-License-Identifier: UNLICENSED
+// import "@openzeppelin/contracts@4.8.0/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-pragma solidity 0.8.14;
-contract BlockCart {
-    address  public owner;
-    string public contractName='BlockCart';
-    constructor(){
-        owner =msg.sender;
+contract BlockCart is ERC20 {
+    constructor() ERC20("BlockCart", "BC") {
+        _mint(msg.sender, 1000 * 10 ** decimals());
+        owner = msg.sender;
     }
 
-    struct restaurant{
+    address public owner;
+    string public contractName = "BlockCart";
+
+    uint256 public foodCount = 1;
+    uint256 public orderCount = 1;
+
+    function getFoodCount() public view returns (uint256) {
+        return foodCount;
+    }
+
+    function getOrderCount() public view returns (uint256) {
+        return orderCount;
+    }
+
+    enum OrderStatus {
+        Cancelled,
+        Completed,
+        Pending
+    }
+    struct Restaurant {
+        address resOwner;
         string name;
-        string description;
+        string desc;
         bool isOpen;
-        bool isRegister;
-        uint successWork;
-        address restaurantOwner;
+        uint256 successWork;
     }
-    uint restaurantCount=0;
-    uint foodCount=0;
-    uint orderCount=0;
 
-    struct food{
-        uint foot_id;
+    struct Food {
+        string imageLink;
         string name;
-        string description;
-        uint price;
+        string desc;
+        string category;
+        uint256 price;
         bool isActive;
+        address resOwner;
     }
-   
-    struct order{
-        address  courrierAddress;
-        uint ordersAmount;
-        uint orderId;
-        uint foodId;
-        uint restaurantId;
-        address restaurantAddress;
-        address customer;
-        uint courrierFee;
+
+    struct Order {
+        uint256[] foodIds;
+        uint256 totalPrice;
+        uint256 courrierFee;
+        string orderAdress;
+        address resOwner;
+        address cusOwner; //customer
+        address courOwner; //courrier
         string orderDetail;
-        bool isCompleted;
-        bool isCancelled;
-        uint time;
+        OrderStatus status;
     }
 
-    struct customer{
-        address customerName;
-        string defaultAddress;
+    struct Customer {
+        address customerAddress;
+        string name;
         string mail;
-        bool isRegister;
-    }
-    struct courrier{
-        address  name ;
-        uint totalEarning;
-        bool isRegister;
-        uint successPercentage;
-    }
-    
-    modifier onlyCustomerOwner{
-        require(customers[msg.sender].isRegister,'you are not customer');
-        _;
+        string phoneNumber;
     }
 
-    modifier onlyCourrierOwner{
-        require(courriers[msg.sender].isRegister, 'you are not courrier');
-        _;
+    struct Courrier {
+        string name;
+        address courAddress;
+        uint256 succedWork;
     }
 
-    mapping(uint => restaurant) public restaurants;
-    mapping(uint=>mapping(uint=>food)) public foodsOfRestaurant;
-    mapping(uint=>order) public orders;
-    mapping(address=>customer)public customers;
-    mapping(address=>courrier)public courriers;
-    
-    event CreateRestaurant(address indexed _from, string _name);
-    event DestroyRestaurant(address indexed _from);
-    event AddFood(address indexed _from, uint _id);
-    event CreateCustomer(address indexed _from);
-    event CreateOrder(address indexed _from,address indexed _to, uint _orderId,uint _foodId);
-    event CancelOrder(address indexed _from,uint _orderId);
-    event Refund(address indexed _from, address indexed _to, uint _orderId);
-    event CompleteOrder(address indexed _from,  uint _orderId);
-    event GetPackage(address indexed _from, uint _orderId);
-    event ChangeActiveFood(uint indexed _id,uint _foodId);
-    event PayToCourrier(uint indexed _id);
-    event UpdateOrderForCourrier(uint indexed _id,uint _fee);
-    event ChangeAddress(address indexed _address,string _localAddress);
-    
-
-    function createRestaurant(string memory _name, string memory _description)public {
-        restaurants[restaurantCount].name=_name;
-        restaurants[restaurantCount].description=_description;
-        restaurants[restaurantCount].isOpen=true;
-        restaurants[restaurantCount].isRegister=true;
-        restaurants[restaurantCount].restaurantOwner=msg.sender;
-        emit CreateRestaurant(msg.sender,_name);
+    struct Comment {
+        string title;
+        string detail;
     }
 
-    function destroyRestaurant(uint _id) public {
-        require(msg.sender==restaurants[_id].restaurantOwner);
-        delete restaurants[restaurantCount];
-        emit DestroyRestaurant(msg.sender);
+    mapping(address => Restaurant) public restaurants;
+    mapping(uint256 => Food) public foods;
+    mapping(uint256 => Order) public orders;
+    mapping(address => Customer) public customers;
+    mapping(address => Courrier) public courriers;
+    mapping(address => Comment[]) comments;
+
+    function createRestaurant(
+        string memory _name,
+        string memory _description
+    ) public {
+        restaurants[msg.sender] = Restaurant(
+            msg.sender,
+            _name,
+            _description,
+            true,
+            0
+        );
     }
 
-    function addFood(uint _id,string memory _name,string memory _description,uint _price)public {
-        require(msg.sender==restaurants[_id].restaurantOwner);
-        foodsOfRestaurant[_id][foodCount].name=_name;
-        foodsOfRestaurant[_id][foodCount].description=_description;
-        foodsOfRestaurant[_id][foodCount].price=_price;
-        foodsOfRestaurant[_id][foodCount].isActive=true;
+    function destroyRestaurant() public {
+        delete restaurants[msg.sender];
+    }
+
+    function changeIsOpen() public {
+        bool isOpen = restaurants[msg.sender].isOpen;
+        restaurants[msg.sender].isOpen = !isOpen;
+    }
+
+    function addFood(
+        string memory _imageLink,
+        string memory _name,
+        string memory _desc,
+        uint256 _price,
+        string memory _category
+    ) public {
+        require(
+            restaurants[msg.sender].resOwner == msg.sender,
+            "Only restaurant owners can add food items"
+        );
+
+        foods[foodCount] = Food(
+            _imageLink,
+            _name,
+            _desc,
+            _category,
+            _price,
+            true,
+            msg.sender
+        );
         foodCount++;
-        emit AddFood(msg.sender,foodCount);
-    } 
-
-    function changeActiveFood(uint _id,uint _foodId)public {
-        require(msg.sender==restaurants[_id].restaurantOwner);
-        foodsOfRestaurant[_id][_foodId].isActive=!foodsOfRestaurant[restaurantCount][_foodId].isActive;
-        emit ChangeActiveFood(_id,_foodId);
-    }
-    function payToCourrier(uint _orderId)public payable {
-        require(msg.sender==orders[_orderId].restaurantAddress ,'you are not owner');
-        require(msg.value >= orders[_orderId].courrierFee);
-        payable(orders[_orderId].courrierAddress).transfer(msg.value);
-        emit PayToCourrier(_orderId);
-    }
-    function updateOrderForCourrier(uint _orderId,uint _courrierFee)public{
-        require(msg.sender==orders[_orderId].restaurantAddress);
-        require(orders[_orderId].isCompleted==false,'order is completed');
-        orders[_orderId].isCancelled=true;
-        orders[_orderId].courrierFee=_courrierFee;
-        emit UpdateOrderForCourrier(_orderId,_courrierFee);
     }
 
-    function createCustomer(string memory _defaultAddress,string memory _mail) public {
-        customers[msg.sender].customerName=msg.sender;
-        customers[msg.sender].defaultAddress=_defaultAddress;
-        customers[msg.sender].mail=_mail;
-        customers[msg.sender].isRegister=true;
-        emit CreateCustomer(msg.sender);
+    function changeActiveFood(uint256 _foodId) public {
+        foods[_foodId].isActive = !foods[_foodId].isActive;
     }
 
-    function changeAddress(string memory _defaultAddress)public onlyCustomerOwner{
-        customers[msg.sender].defaultAddress=_defaultAddress;
-        emit ChangeAddress(msg.sender,_defaultAddress);
+    function createCustomer(
+        string memory _name,
+        string memory _mail,
+        string memory _phoneNumber
+    ) public {
+        customers[msg.sender] = Customer(
+            msg.sender,
+            _name,
+            _mail,
+            _phoneNumber
+        );
     }
 
-    function createOrder(uint _restaurantId,uint _foodId,string memory _orderDetail)public payable onlyCustomerOwner {
-        require(msg.value==foodsOfRestaurant[_restaurantId][_foodId].price,'value must be equal to price of food');
-        require(!foodsOfRestaurant[_restaurantId][_foodId].isActive);
-        payable(restaurants[_restaurantId].restaurantOwner).transfer(msg.value);
-        orders[orderCount].orderId=orderCount;
-        orders[orderCount].foodId=_foodId;
-        orders[orderCount].orderDetail=_orderDetail;
-        orders[orderCount].customer=msg.sender;
-        orders[orderCount].restaurantAddress=restaurants[_restaurantId].restaurantOwner;
-        orders[orderCount].isCompleted=false;
-        orders[orderCount].isCancelled=false;
-        orders[orderCount].time=block.timestamp;
-        orders[orderCount].time=msg.value;
-        orders[orderCount].restaurantId=_restaurantId;
+    function deleteCustomer() public {
+        delete customers[msg.sender];
+    }
+
+    function createCourrier(string memory _name) public {
+        courriers[msg.sender] = Courrier(_name, msg.sender, 0);
+    }
+
+    function deleteCourrier() public {
+        delete courriers[msg.sender];
+    }
+
+
+
+    function createOrder(
+        uint256[] memory _foodIds,
+        string memory _orderAddress,
+        address _restaurantOwner,
+        string memory _orderDetail
+    ) public {
+        require(
+            customers[msg.sender].customerAddress == msg.sender,
+            "Customer must exist"
+        );
+        require(
+            restaurants[_restaurantOwner].resOwner == _restaurantOwner,
+            "Restaurant must exist"
+        );
+        uint256 totalPrice = 0;
+        for (uint256 i = 0; i < _foodIds.length; i++) {
+            totalPrice += foods[_foodIds[i]].price;
+        }
+
+        orders[orderCount] = Order(
+            _foodIds,
+            totalPrice,
+            0,
+            _orderAddress,
+            _restaurantOwner,
+            msg.sender,
+            address(0),
+            _orderDetail,
+            OrderStatus.Pending
+        );
         orderCount++;
-        emit CreateOrder(msg.sender,restaurants[_restaurantId].restaurantOwner,orderCount,_foodId);
     }
-    function cancelOrder(uint _orderId)public{
-        require(orders[_orderId].customer==msg.sender,'order is not yours');
-        require(orders[_orderId].isCompleted==false,'order is completed');
-        orders[_orderId].isCancelled=true;
-        orders[_orderId].isCompleted=true;
-        emit CancelOrder(msg.sender,_orderId);
+        function cancelOrder(uint256 _orderId) public {
+        Order storage order = orders[_orderId];
+        require(order.status == OrderStatus.Pending, "Order must be pending");
+        require(order.cusOwner == msg.sender, "Only customer can cancel order");
+
+        order.status = OrderStatus.Cancelled;
     }
 
-    function refund(uint _orderId)public payable {  
-        require(orders[_orderId].ordersAmount==msg.value);
-        require(orders[_orderId].isCancelled==false,'order is not cancelled');
-        require(orders[_orderId].restaurantAddress==msg.sender,'order is not yours');
-        payable(orders[_orderId].customer).transfer(msg.value);
-        emit Refund(msg.sender,orders[_orderId].customer,_orderId);
+
+    function acceptOrder(uint256 _orderId) public {
+        Order storage order = orders[_orderId];
+        require(order.status == OrderStatus.Pending, "Order must be pending");
+        require(
+            courriers[msg.sender].courAddress == msg.sender,
+            "Courrier must exist"
+        );
+
+        order.courOwner = msg.sender;
+        order.status = OrderStatus.Pending;
     }
-    function completeOrder(uint _orderId)public{
-        require(msg.sender==orders[_orderId].customer);
-        require(orders[_orderId].isCompleted,'order is completed');
-        orders[_orderId].isCancelled=true;
-        restaurants[orders[_orderId].restaurantId].successWork ++;
-        emit CompleteOrder(msg.sender,_orderId);
+
+    function payOrder(uint256 _orderId) public {
+        Order storage order = orders[_orderId];
+        require(order.status == OrderStatus.Pending, "Order must be pending");
+        require(
+            balanceOf(msg.sender) >= order.totalPrice,
+            "Insufficient token balance"
+        );
+
+        order.status = OrderStatus.Completed;
+        transfer(order.resOwner, order.totalPrice);
     }
-    
-    function getpackage(uint _orderId)public{
-        require(msg.sender==orders[_orderId].customer);
-        require(orders[_orderId].isCompleted==false,'order is completed');
-        orders[_orderId].isCancelled=true;
-        orders[_orderId].courrierAddress=msg.sender;
-        emit GetPackage(msg.sender,_orderId);
+    function addDeliveryFee(uint256 _orderId, uint256 _fee) public {
+        Order storage order = orders[_orderId];
+        require(order.status == OrderStatus.Pending, "Order must be pending");
+        require(
+            order.resOwner == msg.sender,
+            "Only restaurant owner can add delivery fee"
+        );
+
+        order.courrierFee += _fee;
+    }
+    function payCourrier(uint256 _orderId) public {
+        Order storage order = orders[_orderId];
+        require(
+            order.status == OrderStatus.Completed,
+            "Order must be completed"
+        );
+        require(
+            order.resOwner == msg.sender,
+            "Only restaurant owner can pay courrier"
+        );
+        require(
+            balanceOf(msg.sender) >= order.courrierFee,
+            "Insufficient token balance"
+        );
+        transfer(order.courOwner, order.totalPrice);
+        order.courrierFee = 0;
+    }
+
+
+    function addComment(
+        uint256 _orderId,
+        string memory _title,
+        string memory _detail
+    ) public {
+        Order storage order = orders[_orderId];
+        require(
+            order.status == OrderStatus.Completed,
+            "Order must be completed"
+        );
+        require(order.cusOwner == msg.sender, "Only customer can add comment");
+
+        comments[order.cusOwner].push(Comment(_title, _detail));
     }
 }
